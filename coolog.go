@@ -5,6 +5,6 @@ package coolog
 // structured logger which did not hide how to use it, was simple (i only want to implement a
 // couple methods), and allowed all the complexity of what package was being used (e.g. zap,
 // logrus, etc.) to be handled in a "New" function and a single call function -- aka "Print".
-type Logger interface { 
+type Logger interface {
 	Print(level string, msg string, data ...map[string]interface{}) error
 }

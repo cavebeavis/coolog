@@ -15,7 +15,7 @@ func main() {
 	// this is the zap logger flavor, but the point is any logger can be used
 	// without having to rewire iNeedsLogger below as long as the new logger
 	// implements the coolog.Logger interface...
-	zapLogger, err := coolog.NewZapLogger(logLevel, logLocations)
+	zapLogger, err := coolog.NewZapLogger(logLevel, logLocations, "text")
 	if err != nil {
 		fmt.Println("well this is seriously embarrassing, zap:", err)
 		return
@@ -24,7 +24,7 @@ func main() {
 
 	iNeedsLogger(zapLogger)
 
-	logrusLogger, err := coolog.NewLogrusLogger(logLevel, logLocations[0])
+	logrusLogger, err := coolog.NewLogrusLogger(logLevel, logLocations[0], "text")
 	if err != nil {
 		fmt.Println("well this is seriously embarrassing, logrus:", err)
 		return

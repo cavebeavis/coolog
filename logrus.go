@@ -1,71 +1,131 @@
 package coolog
 
 import (
+	"fmt"
+	"log"
 	"os"
+	"path"
+	"runtime"
+	"time"
 
 	"github.com/sirupsen/logrus"
 )
 
 // LogrusLogger is our struct to implement the Logger interface.
 type LogrusLogger struct {
-    Logger      *logrus.Logger
+	Logger      *logrus.Logger
 	LogrusLevel logrus.Level
-    Level       string
+	Level       string
 }
 
-// NewLogrusLogger is a convenience function to create the LogrusLogger.
-func NewLogrusLogger(level string, logLocation string) (*LogrusLogger, error) {
-    logger := logrus.New()
+// NewLogrusLogger is a convenience function to create a logrus Logger which implements
+// Logger interface.
+//
+// logLevel is "trace", "debug", "info", "warn", "error", "fatal", or "panic" and will be
+// the minimum level the Logger will log in the file or console. If level is empty, it
+// will default to "info" level.
+//
+// logFilename is where you want the log file stored. If this is empty, it will default
+// to stdout.
+//
+// logType is "json" or "text". If this is empty, it will default to "json".
+func NewLogrusLogger(logLevel, logFilename, logType string) (*LogrusLogger, error) {
+	logger := logrus.New()
 
-	switch logLocation {
-	case "console", "stdout":
-		// fall through
+	logger.SetReportCaller(true) // so we can get the filename, function, and line number.
+
+	callerPrettyfier := func(f *runtime.Frame) (string, string) {
+		filename := path.Base(f.File)
+
+		return fmt.Sprintf("%s()", f.Function), fmt.Sprintf("%s:%d", filename, f.Line)
+	}
+
+	// TODO: add optional opts ...map[string]string to the function to allow user modification.
+	fieldMap := logrus.FieldMap{
+		logrus.FieldKeyMsg:         "msg",
+		logrus.FieldKeyLevel:       "lvl",
+		logrus.FieldKeyTime:        "@timestamp", // For ElasticSearch: https://www.elastic.co/guide/en/ecs/master/ecs-base.html#field-timestamp
+		logrus.FieldKeyLogrusError: "logrusError",
+		logrus.FieldKeyFunc:        "func",
+		logrus.FieldKeyFile:        "filepath",
+	}
+
+	switch logType {
+	case "txt", "text", "plain":
+		logger.Formatter = &logrus.TextFormatter{
+			CallerPrettyfier: callerPrettyfier,
+			TimestampFormat:  time.RFC3339Nano, // TODO: another user configurable field?
+			FieldMap:         fieldMap,
+		}
 	default:
-		f, err := os.Create(logLocation)
+		logger.Formatter = &logrus.JSONFormatter{
+			CallerPrettyfier: callerPrettyfier,
+			TimestampFormat:  time.RFC3339Nano, // TODO: another user configurable field?
+			FieldMap:         fieldMap,
+		}
+	}
+
+	logger.SetOutput(os.Stdout)
+	if logFilename != "" && logFilename != "console" {
+		logger.Println("logging will now be saved in ", logFilename)
+
+		f, err := os.OpenFile(logFilename, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0755)
 		if err != nil {
 			return nil, err
 		}
 
-		logger.SetOutput(f)
+		log.SetOutput(f)
 	}
-	
-	logrusLevel, err := logrus.ParseLevel(level)
+
+	level, err := logrus.ParseLevel(logLevel)
 	if err != nil {
-		logrusLevel = logrus.InfoLevel
+		logger.Error(err)
+		level = logrus.InfoLevel
+		logger.Info("setting log to info level")
 	}
 
-    logger.SetLevel(logrusLevel)
+	logger.SetLevel(level)
 
-    return &LogrusLogger{Logger: logger, LogrusLevel: logrusLevel, Level: level}, nil
+	return &LogrusLogger{
+		Logger: logger,
+		Level:  logger.Level.String(),
+	}, nil
 }
 
 // Print is the main method, and implements interface Logger.
 func (l *LogrusLogger) Print(level string, msg string, data ...map[string]interface{}) error {
-    fields := make(logrus.Fields)
+	fields := make(logrus.Fields)
 
-	for _, d := range data {
-		for k, v := range d {
-			fields[k] = v
+	if len(data) > 0 {
+		for _, dataMap := range data {
+			if dataMap == nil {
+				continue
+			}
+
+			for k, v := range dataMap {
+				fields[k] = v
+			}
 		}
 	}
-    
-    switch level {
-    case "trace":
-        l.Logger.WithFields(fields).Trace(msg)
+
+	switch level {
+	case "trace":
+		l.Logger.WithFields(fields).Trace(msg)
 	case "debug":
-        l.Logger.WithFields(fields).Debug(msg)
-    case "info":
-        l.Logger.WithFields(fields).Info(msg)
-    case "warn":
-        l.Logger.WithFields(fields).Warn(msg)
-    case "error":
+		l.Logger.WithFields(fields).Debug(msg)
+	case "info":
+		l.Logger.WithFields(fields).Info(msg)
+	case "warn":
+		l.Logger.WithFields(fields).Warn(msg)
+	case "error":
 		l.Logger.WithFields(fields).Error(msg)
 	case "fatal":
 		l.Logger.WithFields(fields).Fatal(msg)
 	case "panic":
 		l.Logger.WithFields(fields).Panic(msg)
-    default:
+	default:
 		l.Logger.WithFields(fields).Error(msg)
-    }
-    return nil
+	}
+
+	return nil
 }

@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -35,9 +35,14 @@ func NewLogrusLogger(logLevel, logFilename, logType string) (*LogrusLogger, erro
 	logger.SetReportCaller(true) // so we can get the filename, function, and line number.
 
 	callerPrettyfier := func(f *runtime.Frame) (string, string) {
-		filename := path.Base(f.File)
+		//filename := path.Base(f.File)
+		ptr, filename, ln, _ := runtime.Caller(7)
+		frames := runtime.CallersFrames([]uintptr{ptr})
+		frame, _ := frames.Next()
 
-		return fmt.Sprintf("%s()", f.Function), fmt.Sprintf("%s:%d", filename, f.Line)
+		funcParts := strings.Split(frame.Function, ".")
+
+		return fmt.Sprintf("%s()", funcParts[len(funcParts)-1]), fmt.Sprintf("%s:%d", filename, ln)
 	}
 
 	// TODO: add optional opts ...map[string]string to the function to allow user modification.

@@ -155,6 +155,8 @@ func NewZapLogger(level string, logLocations []string, logType string) (*ZapLogg
 		return nil, err
 	}
 
+	logger = logger.WithOptions(zap.AddCallerSkip(1))
+
 	return &ZapLogger{Logger: logger, Atom: atom, Level: level}, nil
 
 }
